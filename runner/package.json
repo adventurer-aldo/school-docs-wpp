@@ -1,0 +1,17 @@
+{
+  "name": "school-docs-runner",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Tiny always-on bridge: connects to WhatsApp via Baileys, uploads files to Backblaze B2, reports metadata to the Cloudflare Worker.",
+  "main": "index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "^6.7.9",
+    "aws4fetch": "^1.0.20",
+    "dotenv": "^16.4.5",
+    "pino": "^9.3.2"
+  }
+}

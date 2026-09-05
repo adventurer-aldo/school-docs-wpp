@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>School Docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+  :root {
+    --paper: #FBF7EF; --paper-dim: #F1EBDD; --ink: #23261F; --ink-soft: #63665C;
+    --pine: #23453B; --pine-deep: #17332B; --mustard: #C68E17; --rust: #A2431E; --line: #DDD4BE;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--paper); color: var(--ink); font-family: 'Inter', system-ui, sans-serif; }
+  h1, h2, h3, .brand { font-family: 'Zilla Slab', Georgia, serif; }
+  a { color: var(--pine); }
+
+  #app { display: flex; min-height: 100vh; }
+  #sidebar { width: 260px; flex-shrink: 0; background: var(--pine); color: #EFE9D8; padding: 26px 0 20px; display: flex; flex-direction: column; }
+  .brand { padding: 0 22px 20px; font-size: 1.25rem; font-weight: 700; border-bottom: 1px solid rgba(255,255,255,.15); margin-bottom: 4px; }
+  .brand span { color: var(--mustard); }
+  #status-pill { margin: 16px 22px; font-size: .78rem; padding: 6px 10px; border-radius: 100px; display: inline-flex; align-items: center; gap: 6px; }
+  #status-pill.connected { background: rgba(198,142,23,.25); }
+  #status-pill.disconnected, #status-pill.connecting { background: rgba(255,255,255,.1); }
+  #status-pill .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--mustard); }
+  #nav { list-style: none; margin: 10px 0 0; padding: 0; }
+  #nav li { padding: 12px 22px; cursor: pointer; font-size: .93rem; border-left: 3px solid transparent; }
+  #nav li:hover { background: rgba(255,255,255,.06); }
+  #nav li.active { background: var(--paper); color: var(--pine-deep); border-left-color: var(--mustard); font-weight: 600; }
+  #folder-list { list-style: none; margin: 6px 0 0; padding: 0; overflow-y: auto; flex: 1; }
+  #folder-list li { padding: 10px 22px; cursor: pointer; font-size: .9rem; border-left: 3px solid transparent; }
+  #folder-list li:hover { background: rgba(255,255,255,.06); }
+  #folder-list li.active { background: var(--paper); color: var(--pine-deep); border-left-color: var(--mustard); font-weight: 600; }
+  #folder-list .count { display: block; font-size: .74rem; opacity: .65; }
+  #folder-list li.active .count { opacity: .55; }
+  #folder-list li.hidden-badge::after { content: 'hidden'; font-size: .68rem; margin-left: 6px; opacity: .6; }
+
+  main { flex: 1; padding: 36px 44px; max-width: 920px; }
+  .subtitle { color: var(--ink-soft); margin: 0 0 28px; font-size: .95rem; }
+
+  /* Connect screen */
+  #connect-screen { max-width: 480px; margin: 60px auto; text-align: center; }
+  #connect-screen p { color: var(--ink-soft); line-height: 1.6; }
+  #qr-box { background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 20px; display: inline-block; margin: 20px 0; min-height: 216px; min-width: 216px; }
+  #qr-box img, #qr-box canvas { display: block; }
+  .waiting { color: var(--ink-soft); font-size: .9rem; }
+
+  /* Search + sort bar */
+  .toolbar { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; align-items: center; }
+  .toolbar input[type=text] { flex: 1; min-width: 200px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 4px; font-size: .9rem; background: #fff; }
+  .toolbar select { padding: 9px 10px; border: 1px solid var(--line); border-radius: 4px; background: #fff; font-size: .85rem; }
+  .filter-note { font-size: .78rem; color: var(--rust); }
+
+  .doc-group { border: 1px solid var(--line); border-radius: 4px; margin-bottom: 14px; background: #fff; overflow: hidden; }
+  .doc-latest { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 14px 18px; }
+  .doc-name { font-weight: 600; font-size: .97rem; margin: 0 0 4px; }
+  .doc-meta { color: var(--ink-soft); font-size: .82rem; margin: 0; }
+  .doc-caption { font-style: italic; font-size: .82rem; margin: 5px 0 0; }
+  .tag { font-size: .7rem; font-weight: 600; padding: 3px 9px; border-radius: 100px; white-space: nowrap; }
+  .tag-latest { background: var(--mustard); color: #2b1e00; }
+  .doc-actions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+  .doc-actions a { font-weight: 600; font-size: .85rem; text-decoration: none; border-bottom: 1px solid var(--pine); }
+  .older-toggle { background: var(--paper-dim); border-top: 1px solid var(--line); padding: 8px 18px; font-size: .8rem; color: var(--ink-soft); cursor: pointer; }
+  .older-list { display: none; border-top: 1px solid var(--line); }
+  .older-list.open { display: block; }
+  .older-row { display: flex; justify-content: space-between; padding: 9px 18px; font-size: .82rem; border-top: 1px solid var(--line); color: var(--ink-soft); }
+  .older-row:first-child { border-top: none; }
+
+  #empty-state { text-align: center; padding: 60px 20px; color: var(--ink-soft); }
+  #empty-state h2 { color: var(--ink); }
+
+  /* Settings */
+  .settings-section { background: #fff; border: 1px solid var(--line); border-radius: 6px; padding: 20px 22px; margin-bottom: 18px; }
+  .settings-section h3 { margin: 0 0 4px; font-size: 1.05rem; }
+  .settings-section .hint { color: var(--ink-soft); font-size: .85rem; margin: 0 0 14px; }
+  .toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 9px 0; border-top: 1px solid var(--paper-dim); }
+  .toggle-row:first-of-type { border-top: none; }
+  .toggle-row label { font-size: .9rem; }
+  .switch { position: relative; width: 40px; height: 22px; flex-shrink: 0; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .slider { position: absolute; inset: 0; background: var(--line); border-radius: 100px; cursor: pointer; transition: .15s; }
+  .slider::before { content: ''; position: absolute; width: 16px; height: 16px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: .15s; }
+  input:checked + .slider { background: var(--pine); }
+  input:checked + .slider::before { transform: translateX(18px); }
+  .group-row { display: flex; align-items: center; gap: 14px; padding: 10px 0; border-top: 1px solid var(--paper-dim); font-size: .88rem; }
+  .group-row:first-of-type { border-top: none; }
+  .group-row .g-name { flex: 1; }
+  .group-row select { padding: 5px 8px; border: 1px solid var(--line); border-radius: 4px; font-size: .82rem; background: #fff; }
+  input[type=text].plain, input[type=password].plain { padding: 9px 12px; border: 1px solid var(--line); border-radius: 4px; font-size: .9rem; width: 100%; max-width: 380px; }
+  button.action { background: var(--pine); color: #fff; border: none; padding: 9px 16px; border-radius: 4px; font-size: .85rem; font-weight: 600; cursor: pointer; }
+  button.action.danger { background: var(--rust); }
+  button.action:hover { opacity: .92; }
+  .info-snippet { background: var(--paper-dim); border-left: 3px solid var(--mustard); padding: 10px 14px; font-size: .85rem; margin-top: 12px; border-radius: 0 4px 4px 0; }
+  .new-catcher-row { display: flex; gap: 8px; margin-top: 12px; }
+
+  @media (max-width: 760px) { #app { flex-direction: column; } #sidebar { width: 100%; } main { padding: 24px; } }
+</style>
+</head>
+<body>
+<div id="app">
+  <aside id="sidebar">
+    <div class="brand">School <span>Docs</span></div>
+    <div id="status-pill" class="disconnected"><span class="dot"></span><span id="status-text">Checking…</span></div>
+    <ul id="nav">
+      <li data-view="dashboard" class="active">Dashboard</li>
+      <li data-view="settings">Settings</li>
+    </ul>
+    <ul id="folder-list"></ul>
+  </aside>
+  <main id="main"></main>
+</div>
+
+<script>
+const API = '';
+let state = {
+  view: 'dashboard',
+  status: null,
+  folders: [],
+  activeFolder: null,
+  sort: 'date',
+  order: 'desc',
+  hiddenMode: 'exclude',
+  searchQuery: '',
+  searchScope: 'all',
+};
+
+const $main = document.getElementById('main');
+const $folderList = document.getElementById('folder-list');
+const $statusPill = document.getElementById('status-pill');
+const $statusText = document.getElementById('status-text');
+
+function escapeHtml(str) {
+  return String(str ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function fmtDate(iso) {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleString(undefined, { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+function timeAgo(iso) {
+  if (!iso) return 'never';
+  const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+  if (s < 60) return 'just now';
+  if (s < 3600) return Math.floor(s/60) + 'm ago';
+  if (s < 86400) return Math.floor(s/3600) + 'h ago';
+  return Math.floor(s/86400) + 'd ago';
+}
+
+async function api(path, opts) {
+  const res = await fetch(API + path, opts);
+  if (!res.ok) throw new Error('Request failed: ' + path);
+  return res.json();
+}
+
+// ---------- status polling & connect screen ----------
+
+async function pollStatus() {
+  try {
+    const s = await api('/api/status');
+    state.status = s;
+    $statusPill.className = s.status;
+    $statusText.textContent = s.status === 'connected' ? 'Syncing' : s.status === 'connecting' ? 'Connecting…' : 'Not connected';
+    if (s.status === 'connected' && s.lastSyncAt) {
+      $statusText.textContent = 'Synced ' + timeAgo(s.lastSyncAt);
+    }
+    if (s.status !== 'connected') {
+      renderConnectScreen(s);
+    } else if (state.view !== 'settings' && !document.getElementById('doc-view')) {
+      renderView();
+    }
+  } catch (e) { /* keep last known state on transient errors */ }
+}
+
+function renderConnectScreen(s) {
+  if (state.view === 'settings') return; // let people reach settings even while disconnected
+  $folderList.innerHTML = '';
+  $main.innerHTML = \`
+    <div id="connect-screen">
+      <h1>Link WhatsApp</h1>
+      <p>This links the archive to one WhatsApp account, the same way WhatsApp Web works. Open WhatsApp on your phone → Settings → Linked Devices → Link a Device, then scan the code below.</p>
+      <div id="qr-box"></div>
+      <p class="waiting" id="qr-waiting"></p>
+    </div>
+  \`;
+  const box = document.getElementById('qr-box');
+  const waiting = document.getElementById('qr-waiting');
+  if (s.qr && s.qr.data) {
+    box.innerHTML = '';
+    new QRCode(box, { text: s.qr.data, width: 216, height: 216 });
+    waiting.textContent = 'Code refreshes automatically — leave this open.';
+  } else {
+    box.innerHTML = '<span class="waiting">Waiting for the bot to come online…</span>';
+    waiting.textContent = '';
+  }
+}
+
+// ---------- folders sidebar ----------
+
+async function loadFolders() {
+  state.folders = await api('/api/folders?hidden=' + state.hiddenMode);
+  renderFolderList();
+}
+
+function renderFolderList() {
+  if (state.view !== 'dashboard') { $folderList.innerHTML = ''; return; }
+  $folderList.innerHTML = state.folders.map(f => \`
+    <li data-id="\${f.id}" data-type="\${f.type}" class="\${state.activeFolder && state.activeFolder.id===f.id ? 'active' : ''} \${f.hidden ? 'hidden-badge' : ''}">
+      \${escapeHtml(f.name)}
+      <span class="count">\${f.fileCount} file\${f.fileCount===1?'':'s'} · \${timeAgo(f.lastReceivedAt)}</span>
+    </li>
+  \`).join('');
+  $folderList.querySelectorAll('li').forEach(li => {
+    li.addEventListener('click', () => selectFolder(li.dataset.type, li.dataset.id));
+  });
+}
+
+async function selectFolder(type, id) {
+  const folder = state.folders.find(f => f.id === id && f.type === type);
+  state.activeFolder = folder;
+  state.searchQuery = '';
+  renderFolderList();
+  await renderFolderView();
+}
+
+// ---------- dashboard: folder file view ----------
+
+function groupByBaseName(files) {
+  const map = new Map();
+  for (const f of files) {
+    const key = f.base_name || f.original_name;
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push(f);
+  }
+  return [...map.entries()].map(([base, versions]) => {
+    versions.sort((a,b) => new Date(b.sent_at||b.received_at) - new Date(a.sent_at||a.received_at));
+    return { base, latest: versions[0], older: versions.slice(1) };
+  });
+}
+
+function docGroupHtml(g) {
+  const older = g.older.length ? \`
+    <div class="older-toggle" onclick="this.nextElementSibling.classList.toggle('open')">\${g.older.length} earlier version\${g.older.length===1?'':'s'} ▾</div>
+    <div class="older-list">
+      \${g.older.map(o => \`
+        <div class="older-row">
+          <span>\${escapeHtml(o.original_name)} · \${fmtDate(o.sent_at)} · \${escapeHtml(o.sender_name||'Unknown')}</span>
+          <a href="/api/files/\${o.id}/download" target="_blank">Open</a>
+        </div>
+      \`).join('')}
+    </div>\` : '';
+  return \`
+    <div class="doc-group">
+      <div class="doc-latest">
+        <div>
+          <p class="doc-name">\${escapeHtml(g.latest.original_name)}</p>
+          <p class="doc-meta">\${escapeHtml(g.latest.sender_name || 'Unknown sender')} · \${fmtDate(g.latest.sent_at)}\${g.latest.folderName ? ' · ' + escapeHtml(g.latest.folderName) : ''}</p>
+          \${g.latest.caption ? '<p class="doc-caption">"' + escapeHtml(g.latest.caption) + '"</p>' : ''}
+        </div>
+        <div class="doc-actions">
+          <span class="tag tag-latest">Latest</span>
+          <a href="/api/files/\${g.latest.id}/download" target="_blank">Open</a>
+        </div>
+      </div>
+      \${older}
+    </div>
+  \`;
+}
+
+async function renderFolderView() {
+  if (!state.activeFolder) {
+    $main.innerHTML = '<div id="empty-state"><h2>Select a folder</h2><p>Pick a group or catcher folder on the left.</p></div>';
+    return;
+  }
+  $main.innerHTML = '<p class="subtitle">Loading…</p>';
+  const files = await api(\`/api/folders/\${state.activeFolder.type}/\${state.activeFolder.id}/files?sort=\${state.sort}&order=\${state.order}\`);
+  const groups = groupByBaseName(files);
+
+  $main.innerHTML = \`
+    <div id="doc-view">
+      <h1>\${escapeHtml(state.activeFolder.name)}</h1>
+      <p class="subtitle">\${files.length} file\${files.length===1?'':'s'} saved.</p>
+      <div class="toolbar">
+        <input type="text" id="local-search" placeholder="Search within this folder…" value="\${escapeHtml(state.searchQuery)}">
+        <select id="sort-select">
+          <option value="date" \${state.sort==='date'?'selected':''}>Date sent</option>
+          <option value="name" \${state.sort==='name'?'selected':''}>Name</option>
+        </select>
+        <select id="order-select">
+          <option value="desc" \${state.order==='desc'?'selected':''}>Newest / Z→A</option>
+          <option value="asc" \${state.order==='asc'?'selected':''}>Oldest / A→Z</option>
+        </select>
+      </div>
+      <div id="doc-list">\${files.length ? groups.map(docGroupHtml).join('') : '<div id="empty-state"><h2>No files yet</h2><p>Files sent to this group will show up here automatically.</p></div>'}</div>
+    </div>
+  \`;
+  document.getElementById('local-search').addEventListener('input', (e) => {
+    const q = e.target.value.toLowerCase();
+    const filtered = q ? files.filter(f =>
+      f.original_name.toLowerCase().includes(q) ||
+      (f.sender_name||'').toLowerCase().includes(q) ||
+      (f.caption||'').toLowerCase().includes(q)
+    ) : files;
+    document.getElementById('doc-list').innerHTML = filtered.length
+      ? groupByBaseName(filtered).map(docGroupHtml).join('')
+      : '<div id="empty-state"><h2>No matches</h2></div>';
+  });
+  document.getElementById('sort-select').addEventListener('change', (e) => { state.sort = e.target.value; renderFolderView(); });
+  document.getElementById('order-select').addEventListener('change', (e) => { state.order = e.target.value; renderFolderView(); });
+}
+
+// ---------- global search ----------
+
+async function renderDashboardHome() {
+  $main.innerHTML = \`
+    <h1>All files</h1>
+    <p class="subtitle">Search across every group and catcher folder.</p>
+    <div class="toolbar">
+      <input type="text" id="global-search" placeholder="Search everything… (name, sender, caption)" value="\${escapeHtml(state.searchQuery)}">
+      <select id="hidden-mode">
+        <option value="exclude" \${state.hiddenMode==='exclude'?'selected':''}>Hide hidden groups</option>
+        <option value="include" \${state.hiddenMode==='include'?'selected':''}>Include hidden groups</option>
+        <option value="only" \${state.hiddenMode==='only'?'selected':''}>Only hidden groups</option>
+      </select>
+    </div>
+    \${state.hiddenMode !== 'exclude' ? '<p class="filter-note">Filtering: ' + (state.hiddenMode==='only' ? 'showing only hidden groups' : 'including hidden groups') + '</p>' : ''}
+    <div id="search-results"></div>
+  \`;
+  const $results = document.getElementById('search-results');
+  const $input = document.getElementById('global-search');
+  const $hiddenMode = document.getElementById('hidden-mode');
+
+  async function runSearch() {
+    const q = $input.value.trim();
+    state.searchQuery = q;
+    if (!q) { $results.innerHTML = '<div id="empty-state"><h2>Start typing to search</h2><p>Or pick a folder on the left to browse by group.</p></div>'; return; }
+    const results = await api(\`/api/search?q=\${encodeURIComponent(q)}&hidden=\${state.hiddenMode}\`);
+    $results.innerHTML = results.length
+      ? results.map(r => \`
+          <div class="doc-group">
+            <div class="doc-latest">
+              <div>
+                <p class="doc-name">\${escapeHtml(r.original_name)}</p>
+                <p class="doc-meta">\${escapeHtml(r.sender_name||'Unknown sender')} · \${fmtDate(r.sent_at)} · \${escapeHtml(r.folderName || 'Unknown folder')}</p>
+                \${r.caption ? '<p class="doc-caption">"' + escapeHtml(r.caption) + '"</p>' : ''}
+              </div>
+              <div class="doc-actions"><a href="/api/files/\${r.id}/download" target="_blank">Open</a></div>
+            </div>
+          </div>
+        \`).join('')
+      : '<div id="empty-state"><h2>No matches</h2></div>';
+  }
+  $input.addEventListener('input', () => { clearTimeout(window.__searchDebounce); window.__searchDebounce = setTimeout(runSearch, 250); });
+  $hiddenMode.addEventListener('change', (e) => { state.hiddenMode = e.target.value; loadFolders(); runSearch(); });
+  if (state.searchQuery) runSearch();
+}
+
+// ---------- settings ----------
+
+async function renderSettings() {
+  $folderList.innerHTML = '';
+  const s = await api('/api/settings');
+  $main.innerHTML = \`
+    <h1>Settings</h1>
+    <p class="subtitle">Controls what the bot saves, and how it's organized.</p>
+
+    <div class="settings-section">
+      <h3>What to download</h3>
+      <p class="hint">Documents are on by default since that's usually what matters for school files. Images and videos are off by default — turn them on if you want everything.</p>
+      <div class="toggle-row"><label>Documents (PDF, Word, Excel…)</label><label class="switch"><input type="checkbox" id="tg-doc" \${s.downloadDocuments?'checked':''}><span class="slider"></span></label></div>
+      <div class="toggle-row"><label>Images</label><label class="switch"><input type="checkbox" id="tg-img" \${s.downloadImages?'checked':''}><span class="slider"></span></label></div>
+      <div class="toggle-row"><label>Videos</label><label class="switch"><input type="checkbox" id="tg-vid" \${s.downloadVideos?'checked':''}><span class="slider"></span></label></div>
+    </div>
+
+    <div class="settings-section">
+      <h3>Catcher folders</h3>
+      <p class="hint">Route several related groups (e.g. "Physiology I - Class A" and "Class B") into one shared folder, so you're not juggling near-duplicate group folders.</p>
+      <div id="catcher-list"></div>
+      <div class="new-catcher-row">
+        <input type="text" class="plain" id="new-catcher-name" placeholder="New catcher folder name">
+        <button class="action" id="add-catcher">Add</button>
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <h3>Groups</h3>
+      <p class="hint">Hide a group from the dashboard list, stop downloading from it entirely, or route it into a catcher folder.</p>
+      <div id="group-list-settings"></div>
+    </div>
+
+    <div class="settings-section">
+      <h3>De-sync message</h3>
+      <p class="hint">Set a private phrase here <em>before</em> you scan the QR code. Later, sending that exact phrase in any WhatsApp chat from the linked account will automatically unlink it — handy for switching which phone/account feeds the archive without needing to open this page.</p>
+      <input type="text" class="plain" id="desync-message" placeholder="e.g. a random phrase only you'd send" value="\${escapeHtml(s.desyncMessage)}">
+      <div style="margin-top:10px;"><button class="action" id="save-desync-message">Save phrase</button></div>
+      <div style="margin-top:16px; padding-top:16px; border-top:1px solid var(--paper-dim);">
+        <button class="action danger" id="desync-now">De-sync now</button>
+        <div id="desync-info" class="info-snippet" style="display:none;">
+          De-sync requested. The bot will unlink on its next check-in (usually within a few seconds) — you can then scan a fresh QR code to link a different account.
+        </div>
+      </div>
+    </div>
+  \`;
+
+  renderCatcherList(s.catchers, s.groups);
+  renderGroupSettingsList(s.groups, s.catchers);
+
+  document.getElementById('tg-doc').addEventListener('change', saveMediaToggles);
+  document.getElementById('tg-img').addEventListener('change', saveMediaToggles);
+  document.getElementById('tg-vid').addEventListener('change', saveMediaToggles);
+
+  document.getElementById('add-catcher').addEventListener('click', async () => {
+    const name = document.getElementById('new-catcher-name').value.trim();
+    if (!name) return;
+    await api('/api/catchers', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ name }) });
+    renderSettings();
+  });
+
+  document.getElementById('save-desync-message').addEventListener('click', async () => {
+    const message = document.getElementById('desync-message').value;
+    await api('/api/settings/desync-message', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ message }) });
+  });
+
+  document.getElementById('desync-now').addEventListener('click', async () => {
+    await api('/api/commands/desync', { method: 'POST' });
+    document.getElementById('desync-info').style.display = 'block';
+  });
+}
+
+function renderCatcherList(catchers, groups) {
+  const el = document.getElementById('catcher-list');
+  if (!catchers.length) { el.innerHTML = '<p class="hint" style="margin:0;">No catcher folders yet.</p>'; return; }
+  el.innerHTML = catchers.map(c => {
+    const count = groups.filter(g => g.catcherId === c.id).length;
+    return \`<div class="group-row"><span class="g-name">\${escapeHtml(c.name)} <span style="color:var(--ink-soft);font-size:.8rem;">(\${count} group\${count===1?'':'s'})</span></span><button class="action danger" data-delete-catcher="\${c.id}">Remove</button></div>\`;
+  }).join('');
+  el.querySelectorAll('[data-delete-catcher]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      await fetch(\`/api/catchers/\${btn.dataset.deleteCatcher}\`, { method: 'DELETE' });
+      renderSettings();
+    });
+  });
+}
+
+function renderGroupSettingsList(groups, catchers) {
+  const el = document.getElementById('group-list-settings');
+  if (!groups.length) { el.innerHTML = '<p class="hint" style="margin:0;">No groups yet — they appear here once the bot sees a file from them.</p>'; return; }
+  el.innerHTML = groups.map(g => \`
+    <div class="group-row">
+      <span class="g-name">\${escapeHtml(g.name)}</span>
+      <label class="switch" title="Visible on dashboard"><input type="checkbox" data-jid="\${g.jid}" data-field="hidden" \${!g.hidden?'checked':''}><span class="slider"></span></label>
+      <span style="font-size:.78rem;color:var(--ink-soft);width:44px;">Visible</span>
+      <label class="switch" title="Download files from this group"><input type="checkbox" data-jid="\${g.jid}" data-field="downloadEnabled" \${g.downloadEnabled?'checked':''}><span class="slider"></span></label>
+      <span style="font-size:.78rem;color:var(--ink-soft);width:60px;">Downloads</span>
+      <select data-jid="\${g.jid}" data-field="catcherId">
+        <option value="">No catcher</option>
+        \${catchers.map(c => \`<option value="\${c.id}" \${g.catcherId===c.id?'selected':''}>\${escapeHtml(c.name)}</option>\`).join('')}
+      </select>
+    </div>
+  \`).join('');
+  el.querySelectorAll('input[type=checkbox]').forEach(input => {
+    input.addEventListener('change', async () => {
+      const field = input.dataset.field;
+      // "Visible" switch is inverted from the "hidden" DB field.
+      const value = field === 'hidden' ? !input.checked : input.checked;
+      await api(\`/api/groups/\${encodeURIComponent(input.dataset.jid)}\`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ [field]: value }) });
+      if (field !== 'hidden' && field !== 'downloadEnabled') return;
+      loadFolders();
+    });
+  });
+  el.querySelectorAll('select').forEach(sel => {
+    sel.addEventListener('change', async () => {
+      await api(\`/api/groups/\${encodeURIComponent(sel.dataset.jid)}\`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ catcherId: sel.value || null }) });
+      loadFolders();
+    });
+  });
+}
+
+async function saveMediaToggles() {
+  await api('/api/settings/media', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({
+      downloadDocuments: document.getElementById('tg-doc').checked,
+      downloadImages: document.getElementById('tg-img').checked,
+      downloadVideos: document.getElementById('tg-vid').checked,
+    })
+  });
+}
+
+// ---------- nav ----------
+
+document.querySelectorAll('#nav li').forEach(li => {
+  li.addEventListener('click', () => {
+    document.querySelectorAll('#nav li').forEach(x => x.classList.remove('active'));
+    li.classList.add('active');
+    state.view = li.dataset.view;
+    renderView();
+  });
+});
+
+async function renderView() {
+  if (state.status && state.status.status !== 'connected' && state.view === 'dashboard') {
+    renderConnectScreen(state.status);
+    $folderList.innerHTML = '';
+    return;
+  }
+  if (state.view === 'settings') {
+    await renderSettings();
+  } else {
+    await loadFolders();
+    if (state.activeFolder) { await renderFolderView(); } else { await renderDashboardHome(); }
+  }
+}
+
+pollStatus().then(() => { if (state.status && state.status.status === 'connected') renderView(); });
+setInterval(pollStatus, 5000);
+setInterval(() => { if (state.view === 'dashboard') loadFolders(); }, 20000);
+</script>
+</body>
+</html>
